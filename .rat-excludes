@@ -110,3 +110,7 @@ chart/.gitignore
 chart/values.schema.json
 chart/Chart.lock
 chart/values_schema.schema.json
+
+# Astronomer extension scripts
+astronomer-*.sh
+astronomer-certified-setup.py
