@@ -69,12 +69,8 @@ from airflow.security import permissions
 from airflow.stats import Stats
 from airflow.typing_compat import RePatternType
 from airflow.timetables.base import TimeRestriction, TimeTableProtocol
-from airflow.timetables.compat import (
-    CronDataIntervalTimeTable,
-    DeltaDataIntervalTimeTable,
-    NullTimeTable,
-    OnceTimeTable,
-)
+from airflow.timetables.interval import CronDataIntervalTimeTable, DeltaDataIntervalTimeTable
+from airflow.timetables.simple import NullTimeTable, OnceTimeTable
 from airflow.utils import timezone
 from airflow.utils.dates import cron_presets, date_range as utils_date_range
 from airflow.utils.file import correct_maybe_zipped
