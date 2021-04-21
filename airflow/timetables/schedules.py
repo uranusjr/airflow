@@ -18,11 +18,12 @@
 import datetime
 import typing
 
-from croniter import croniter
+from croniter import CroniterBadCronError, CroniterBadDateError, croniter
 from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
 from pendulum.tz.timezone import UTC, Timezone
 
+from airflow.exceptions import AirflowTimeTableInvalid
 from airflow.timetables.base import TimeRestriction
 from airflow.typing_compat import Protocol
 from airflow.utils.dates import cron_presets
@@ -33,6 +34,13 @@ Delta = typing.Union[datetime.timedelta, relativedelta]
 
 class Schedule(Protocol):
     """Base protocol for schedules."""
+
+    def validate(self) -> None:
+        """Validate the time table is correctly specified.
+
+        This should raise AirflowTimeTableInvalid on validation failure.
+        """
+        raise NotImplementedError()
 
     def cancel_catchup(self, restriction: TimeRestriction) -> TimeRestriction:
         """Fix time restriction to not perform catchup."""
@@ -85,6 +93,18 @@ class CronSchedule(Schedule):
         self._expression = expression = cron_presets.get(expression, expression)
         self._timezone = timezone
         self._should_fix_dst = not _is_schedule_fixed(expression)
+
+    def __eq__(self, other: typing.Any) -> bool:
+        """Both expression and timezone should match."""
+        if not isinstance(other, CronSchedule):
+            return NotImplemented
+        return self._expression == other._expression and self._timezone == other._timezone
+
+    def validate(self) -> None:
+        try:
+            croniter(self._expression)
+        except (CroniterBadCronError, CroniterBadDateError) as e:
+            raise AirflowTimeTableInvalid(str(e))
 
     def get_next(self, current: DateTime) -> DateTime:
         """Get the first schedule after specified time, with DST fixed."""
@@ -149,6 +169,15 @@ class DeltaSchedule(Schedule):
 
     def __init__(self, delta: Delta) -> None:
         self._delta = delta
+
+    def __eq__(self, other: typing.Any) -> bool:
+        """The offset should match."""
+        if not isinstance(other, DeltaSchedule):
+            return NotImplemented
+        return self._delta == other._delta
+
+    def validate(self) -> None:
+        pass  # TODO: Check the delta is positive?
 
     def get_next(self, current: DateTime) -> DateTime:
         return convert_to_utc(current + self._delta)

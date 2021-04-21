@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from typing import Optional
+from typing import Any, Optional
 
 from pendulum import DateTime
 from pendulum.tz.timezone import Timezone
@@ -36,6 +36,15 @@ class DataIntervalTimeTable(TimeTable):
 
     def cancel_catchup(self, between: TimeRestriction) -> TimeRestriction:
         return self._schedule.cancel_catchup(between)
+
+    def __eq__(self, other: Any) -> bool:
+        """Delegate to the schedule."""
+        if not isinstance(other, DataIntervalTimeTable):
+            return NotImplemented
+        return self._schedule == other._schedule
+
+    def validate(self) -> None:
+        self._schedule.validate()
 
     def next_dagrun_info(
         self,

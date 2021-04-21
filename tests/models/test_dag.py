@@ -48,6 +48,7 @@ from airflow.operators.bash import BashOperator
 from airflow.operators.dummy import DummyOperator
 from airflow.operators.subdag import SubDagOperator
 from airflow.security import permissions
+from airflow.timetables.simple import NullTimeTable, OnceTimeTable
 from airflow.utils import timezone
 from airflow.utils.file import list_py_file_paths
 from airflow.utils.session import create_session, provide_session
@@ -58,6 +59,7 @@ from airflow.utils.weight_rule import WeightRule
 from tests.models import DEFAULT_DATE
 from tests.test_utils.asserts import assert_queries_count
 from tests.test_utils.db import clear_db_dags, clear_db_runs
+from tests.test_utils.timetables import cron_time_table, delta_time_table
 
 TEST_DATE = datetime_tz(2015, 1, 2, 0, 0)
 
@@ -1096,7 +1098,7 @@ class TestDag(unittest.TestCase):
         dag_id = "test_schedule_dag_once"
         dag = DAG(dag_id=dag_id)
         dag.schedule_interval = '@once'
-        assert dag.normalized_schedule_interval is None
+        assert isinstance(dag.time_table, OnceTimeTable)
         dag.add_task(BaseOperator(task_id="faketastic", owner='Also fake', start_date=TEST_DATE))
 
         # Sync once to create the DagModel
@@ -1208,20 +1210,20 @@ class TestDag(unittest.TestCase):
 
     @parameterized.expand(
         [
-            (None, None),
-            ("@daily", "0 0 * * *"),
-            ("@weekly", "0 0 * * 0"),
-            ("@monthly", "0 0 1 * *"),
-            ("@quarterly", "0 0 1 */3 *"),
-            ("@yearly", "0 0 1 1 *"),
-            ("@once", None),
-            (datetime.timedelta(days=1), datetime.timedelta(days=1)),
+            (None, NullTimeTable()),
+            ("@daily", cron_time_table("0 0 * * *")),
+            ("@weekly", cron_time_table("0 0 * * 0")),
+            ("@monthly", cron_time_table("0 0 1 * *")),
+            ("@quarterly", cron_time_table("0 0 1 */3 *")),
+            ("@yearly", cron_time_table("0 0 1 1 *")),
+            ("@once", OnceTimeTable()),
+            (datetime.timedelta(days=1), delta_time_table(datetime.timedelta(days=1))),
         ]
     )
-    def test_normalized_schedule_interval(self, schedule_interval, expected_n_schedule_interval):
+    def test_time_table(self, schedule_interval, expected_time_table):
         dag = DAG("test_schedule_interval", schedule_interval=schedule_interval)
 
-        assert dag.normalized_schedule_interval == expected_n_schedule_interval
+        assert dag.time_table == expected_time_table
         assert dag.schedule_interval == schedule_interval
 
     def test_set_dag_runs_state(self):

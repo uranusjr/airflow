@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from typing import Optional
+from typing import Any, Optional
 
 from pendulum import DateTime
 
@@ -27,6 +27,15 @@ class NullTimeTable(TimeTable):
 
     This corresponds to ``schedule_interval=None``.
     """
+
+    def __eq__(self, other: Any) -> bool:
+        """As long as *other* is of the same type."""
+        if not isinstance(other, NullTimeTable):
+            return NotImplemented
+        return True
+
+    def validate(self) -> None:
+        pass
 
     def cancel_catchup(self, between: TimeRestriction) -> TimeRestriction:
         return between
@@ -44,6 +53,15 @@ class OnceTimeTable(TimeTable):
 
     This corresponds to ``schedule_interval="@once"``.
     """
+
+    def __eq__(self, other: Any) -> bool:
+        """As long as *other* is of the same type."""
+        if not isinstance(other, OnceTimeTable):
+            return NotImplemented
+        return True
+
+    def validate(self) -> None:
+        pass
 
     def cancel_catchup(self, between: TimeRestriction) -> TimeRestriction:
         return between
