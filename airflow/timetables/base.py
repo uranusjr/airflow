@@ -79,6 +79,13 @@ class DagRunInfo(NamedTuple):
 class TimeTable(Protocol):
     """Protocol that all TimeTable classes are expected to implement."""
 
+    def validate(self) -> None:
+        """Validate the time table is correctly specified.
+
+        This should raise AirflowTimeTableInvalid on validation failure.
+        """
+        raise NotImplementedError()
+
     def cancel_catchup(self, between: TimeRestriction) -> TimeRestriction:
         """Fix time restriction to not perform catchup."""
         raise NotImplementedError()

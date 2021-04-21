@@ -102,6 +102,17 @@ class AirflowClusterPolicyViolation(AirflowException):
     """Raise when there is a violation of a Cluster Policy in Dag definition"""
 
 
+class AirflowTimeTableInvalid(AirflowException):
+    """Raise when a DAG has an invalid time table."""
+
+    def __init__(self, error: str) -> None:
+        super().__init__(error)
+        self._error = error
+
+    def __str__(self) -> str:
+        return self._error
+
+
 class DagNotFound(AirflowNotFoundException):
     """Raise when a DAG is not available in the system"""
 
