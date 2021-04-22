@@ -15,33 +15,33 @@
 # specific language governing permissions and limitations
 # under the License.
 
-"""Tests for Schedule.iter_between() and Schedule.iter_next_n()."""
+"""Tests for TimeTable.iter_between() and TimeTable.iter_next_n()."""
 
 from datetime import datetime, timedelta
 
 import pytest
 
 from airflow.settings import TIMEZONE
-from airflow.timetables.schedules import DeltaSchedule
+from airflow.timetables.interval import DeltaDataIntervalTimeTable
 from airflow.utils.timezone import is_localized
 
 
 @pytest.fixture()
-def schedule_1s():
-    return DeltaSchedule(timedelta(seconds=1))
+def time_table_1s():
+    return DeltaDataIntervalTimeTable(timedelta(seconds=1))
 
 
-def test_end_date_before_start_date(schedule_1s):
+def test_end_date_before_start_date(time_table_1s):
     start = datetime(2016, 2, 1, tzinfo=TIMEZONE)
     end = datetime(2016, 1, 1, tzinfo=TIMEZONE)
     message = r"start \([- :+\d]{25}\) > end \([- :+\d]{25}\)"
     with pytest.raises(ValueError, match=message):
-        list(schedule_1s.iter_between(start, end))
+        list(time_table_1s.iter_between(start, end))
 
 
 @pytest.mark.parametrize("num", list(range(1, 10)))
-def test_positive_num_given(schedule_1s, num):
+def test_positive_num_given(time_table_1s, num):
     start = datetime(2016, 1, 1, tzinfo=TIMEZONE)
-    result = list(schedule_1s.iter_next_n(start, num))
+    result = list(time_table_1s.iter_next_n(start, num))
     assert len(result) == num
     assert all(is_localized(d) for d in result)

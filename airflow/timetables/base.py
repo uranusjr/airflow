@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from typing import NamedTuple, Optional
+from typing import Iterator, NamedTuple, Optional
 
 from pendulum import DateTime
 
@@ -110,3 +110,25 @@ class TimeTable(Protocol):
             return a DagRunInfo when asked later.
         """
         raise NotImplementedError()
+
+    def iter_between(self, start: DateTime, end: DateTime) -> Iterator[DateTime]:
+        """Get schedules between the *start* and *end*."""
+        if start > end:
+            raise ValueError(f"start ({start}) > end ({end})")
+        between = TimeRestriction(start, end)
+        next_info = self.next_dagrun_info(None, between)
+        while next_info is not None:
+            dagrun_start = next_info.data_interval.start
+            yield dagrun_start
+            next_info = self.next_dagrun_info(dagrun_start, between)
+
+    def iter_next_n(self, start: DateTime, num: int) -> Iterator[DateTime]:
+        """Get the next *num* schedules after *start*."""
+        between = TimeRestriction(start, None)
+        next_info = self.next_dagrun_info(None, between)
+        for _ in range(abs(num)):
+            if next_info is None:
+                return
+            dagrun_start = next_info.data_interval.start
+            yield dagrun_start
+            next_info = self.next_dagrun_info(dagrun_start, between)

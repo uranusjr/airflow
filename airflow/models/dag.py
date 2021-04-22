@@ -444,21 +444,14 @@ class DAG(LoggingMixin):
         num: Optional[int] = None,
         end_date: Optional[datetime] = timezone.utcnow(),
     ) -> List[datetime]:
-        # XXX: I really don't want to expose scheduling logic on the time table
-        # class because the idea does not make sense for non-repeating ones, and
-        # the goal of the time table abstraction is exactly to allow arbitrary
-        # schedling logic. Callers of this function should be refactored to use
-        # something else, eventually.
-        try:
-            schedule: Schedule = self.time_table._schedule
-        except AttributeError:
-            return []
         start = pendulum.instance(start_date)
-        if num is not None:
-            return sorted(schedule.iter_next_n(start, num))
+        if num:
+            return sorted(self.time_table.iter_next_n(start, num))
         if end_date is None:
-            return []
-        return sorted(schedule.iter_between(start, pendulum.instance(end_date)))
+            end = pendulum.now(timezone.utc)
+        else:
+            end = pendulum.instance(end_date)
+        return sorted(self.time_table.iter_between(start, end))
 
     def following_schedule(self, dttm):
         """
@@ -467,16 +460,12 @@ class DAG(LoggingMixin):
         :param dttm: utc datetime
         :return: utc datetime
         """
-        # XXX: I really don't want to expose get_next() on the time table class
-        # because the idea only makes sense for periodic ones, and the goal of
-        # the time table abstraction is exactly to remove the assumption that
-        # (most) time tables are periodic. Callers of this function should be
-        # refactored to use something else, eventually.
-        try:
-            schedule: Schedule = self.time_table._schedule
-        except AttributeError:
+        current = pendulum.instance(dttm)
+        between = TimeRestriction(None, None)
+        next_info = self.time_table.next_dagrun_info(current, between)
+        if next_info is None:
             return None
-        scheduled = schedule.get_next(pendulum.instance(dttm))
+        scheduled = next_info.data_interval.start
         # XXX: Compatibility. Some tests expect datetime.datetime but not
         # pendulum.DateTime (they have different string representations). We
         # should fix those tests instead.
