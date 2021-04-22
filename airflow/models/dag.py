@@ -476,7 +476,11 @@ class DAG(LoggingMixin):
             schedule: Schedule = self.time_table._schedule
         except AttributeError:
             return None
-        return schedule.get_next(pendulum.instance(dttm))
+        scheduled = schedule.get_next(pendulum.instance(dttm))
+        # XXX: Compatibility. Some tests expect datetime.datetime but not
+        # pendulum.DateTime (they have different string representations). We
+        # should fix those tests instead.
+        return datetime.fromtimestamp(scheduled.timestamp(), scheduled.tzinfo)
 
     def previous_schedule(self, dttm):
         """
