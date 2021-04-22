@@ -17,10 +17,9 @@
 # under the License.
 
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Union
+from typing import Dict
 
 from croniter import croniter
-from dateutil.relativedelta import relativedelta  # noqa: F401 for doctest
 
 from airflow.utils import timezone
 
@@ -32,101 +31,6 @@ cron_presets: Dict[str, str] = {
     '@quarterly': '0 0 1 */3 *',
     '@yearly': '0 0 1 1 *',
 }
-
-
-# pylint: disable=too-many-branches
-def date_range(
-    start_date: datetime,
-    end_date: Optional[datetime] = None,
-    num: Optional[int] = None,
-    delta: Optional[Union[str, timedelta, relativedelta]] = None,
-) -> List[datetime]:
-    """
-    Get a set of dates as a list based on a start, end and delta, delta
-    can be something that can be added to `datetime.datetime`
-    or a cron expression as a `str`
-
-    .. code-block:: python
-
-        date_range(datetime(2016, 1, 1), datetime(2016, 1, 3), delta=timedelta(1))
-            [datetime.datetime(2016, 1, 1, 0, 0), datetime.datetime(2016, 1, 2, 0, 0),
-            datetime.datetime(2016, 1, 3, 0, 0)]
-        date_range(datetime(2016, 1, 1), datetime(2016, 1, 3), delta='0 0 * * *')
-            [datetime.datetime(2016, 1, 1, 0, 0), datetime.datetime(2016, 1, 2, 0, 0),
-            datetime.datetime(2016, 1, 3, 0, 0)]
-        date_range(datetime(2016, 1, 1), datetime(2016, 3, 3), delta="0 0 0 * *")
-            [datetime.datetime(2016, 1, 1, 0, 0), datetime.datetime(2016, 2, 1, 0, 0),
-            datetime.datetime(2016, 3, 1, 0, 0)]
-
-    :param start_date: anchor date to start the series from
-    :type start_date: datetime.datetime
-    :param end_date: right boundary for the date range
-    :type end_date: datetime.datetime
-    :param num: alternatively to end_date, you can specify the number of
-        number of entries you want in the range. This number can be negative,
-        output will always be sorted regardless
-    :type num: int
-    :param delta: step length. It can be datetime.timedelta or cron expression as string
-    :type delta: datetime.timedelta or str or dateutil.relativedelta
-    """
-    if not delta:
-        return []
-    if end_date:
-        if start_date > end_date:
-            raise Exception("Wait. start_date needs to be before end_date")
-        if num:
-            raise Exception("Wait. Either specify end_date OR num")
-    if not end_date and not num:
-        end_date = timezone.utcnow()
-
-    delta_iscron = False
-    time_zone = start_date.tzinfo
-
-    abs_delta: Union[timedelta, relativedelta]
-    if isinstance(delta, str):
-        delta_iscron = True
-        if timezone.is_localized(start_date):
-            start_date = timezone.make_naive(start_date, time_zone)
-        cron = croniter(cron_presets.get(delta, delta), start_date)
-    elif isinstance(delta, timedelta):
-        abs_delta = abs(delta)
-    elif isinstance(delta, relativedelta):
-        abs_delta = abs(delta)
-    else:
-        raise Exception("Wait. delta must be either datetime.timedelta or cron expression as str")
-
-    dates = []
-    if end_date:
-        if timezone.is_naive(start_date) and not timezone.is_naive(end_date):
-            end_date = timezone.make_naive(end_date, time_zone)
-        while start_date <= end_date:  # type: ignore
-            if timezone.is_naive(start_date):
-                dates.append(timezone.make_aware(start_date, time_zone))
-            else:
-                dates.append(start_date)
-
-            if delta_iscron:
-                start_date = cron.get_next(datetime)
-            else:
-                start_date += abs_delta
-    else:
-        num_entries: int = num  # type: ignore
-        for _ in range(abs(num_entries)):
-            if timezone.is_naive(start_date):
-                dates.append(timezone.make_aware(start_date, time_zone))
-            else:
-                dates.append(start_date)
-
-            if delta_iscron and num_entries > 0:
-                start_date = cron.get_next(datetime)
-            elif delta_iscron:
-                start_date = cron.get_prev(datetime)
-            elif num_entries > 0:
-                start_date += abs_delta
-            else:
-                start_date -= abs_delta
-
-    return sorted(dates)
 
 
 def round_time(dt, delta, start_date=timezone.make_aware(datetime.min)):

@@ -31,6 +31,8 @@ from airflow.utils.timezone import convert_to_utc, make_aware, make_naive
 
 Delta = typing.Union[datetime.timedelta, relativedelta]
 
+DateTimes = typing.Iterator[DateTime]
+
 
 class Schedule(Protocol):
     """Base protocol for schedules."""
@@ -62,6 +64,24 @@ class Schedule(Protocol):
         schedule is not fixed (e.g. every hour), the given time is returned.
         """
         raise NotImplementedError()
+
+    def iter_between(self, start: DateTime, end: DateTime) -> DateTimes:
+        """Get schedules between the *start* and *end*."""
+        if start > end:
+            raise ValueError(f"start ({start}) > end ({end})")
+        next_date = self.align(start)
+        while next_date <= end:
+            yield next_date
+            next_date = self.get_next(next_date)
+
+    def iter_next_n(self, start: DateTime, num: int) -> DateTimes:
+        """Get the next *num* schedules after *start*."""
+        if num < 0:
+            raise ValueError(f"num ({num}) < 0")
+        next_date = self.align(start)
+        for _ in range(num):
+            yield next_date
+            next_date = self.get_next(next_date)
 
 
 def _is_schedule_fixed(expression: str) -> bool:

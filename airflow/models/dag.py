@@ -73,7 +73,7 @@ from airflow.timetables.base import TimeRestriction, TimeTable
 from airflow.timetables.interval import CronDataIntervalTimeTable, DeltaDataIntervalTimeTable
 from airflow.timetables.simple import NullTimeTable, OnceTimeTable
 from airflow.utils import timezone
-from airflow.utils.dates import cron_presets, date_range as utils_date_range
+from airflow.utils.dates import cron_presets
 from airflow.utils.file import correct_maybe_zipped
 from airflow.utils.helpers import validate_key
 from airflow.utils.log.logging_mixin import LoggingMixin
@@ -444,11 +444,21 @@ class DAG(LoggingMixin):
         num: Optional[int] = None,
         end_date: Optional[datetime] = timezone.utcnow(),
     ) -> List[datetime]:
+        # XXX: I really don't want to expose scheduling logic on the time table
+        # class because the idea does not make sense for non-repeating ones, and
+        # the goal of the time table abstraction is exactly to allow arbitrary
+        # schedling logic. Callers of this function should be refactored to use
+        # something else, eventually.
+        try:
+            schedule: Schedule = self.time_table._schedule
+        except AttributeError:
+            return []
+        start = pendulum.instance(start_date)
         if num is not None:
-            end_date = None
-        return utils_date_range(
-            start_date=start_date, end_date=end_date, num=num, delta=self.normalized_schedule_interval
-        )
+            return sorted(schedule.iter_next_n(start, num))
+        if end_date is None:
+            return []
+        return sorted(schedule.iter_between(start, pendulum.instance(end_date)))
 
     def is_fixed_time_schedule(self):
         """
