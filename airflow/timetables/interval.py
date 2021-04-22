@@ -47,7 +47,7 @@ class DataIntervalTimeTable(TimeTable):
             # the schedule, and retrospectively create a data interval for it.
             if between.earliest is None:
                 return None
-            start = self._schedule.get_next_schedule(between.earliest)
+            start = self._schedule.align(between.earliest)
         else:
             # There's a previous run. Create a data interval starting from when
             # the end of the previous interval.

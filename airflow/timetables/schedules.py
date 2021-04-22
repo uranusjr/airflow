@@ -46,16 +46,14 @@ class Schedule(Protocol):
         """Get the last schedule before the current time."""
         raise NotImplementedError()
 
-    def get_next_schedule(self, current: DateTime) -> DateTime:
-        """Get the next scheduled time.
+    def align(self, current: DateTime) -> DateTime:
+        """Align given time to the scheduled.
 
-        This is ``current + interval``, unless ``current`` is first interval,
-        then ``current`` is returned.
+        For fixed schedules (e.g. every midnight); this finds the next time that
+        aligns to the declared time, if the given time does not align. If the
+        schedule is not fixed (e.g. every hour), the given time is returned.
         """
-        next_time = self.get_next(current)
-        if self.get_prev(next_time) != current:
-            return next_time
-        return current
+        raise NotImplementedError()
 
 
 def _is_schedule_fixed(expression: str) -> bool:
@@ -108,6 +106,17 @@ class CronSchedule(Schedule):
         delta = naive - scheduled
         return convert_to_utc(current.in_timezone(self._timezone) - delta)
 
+    def align(self, current: DateTime) -> DateTime:
+        """Get the next scheduled time.
+
+        This is ``current + interval``, unless ``current`` is first interval,
+        then ``current`` is returned.
+        """
+        next_time = self.get_next(current)
+        if self.get_prev(next_time) != current:
+            return next_time
+        return current
+
     def cancel_catchup(self, restriction: TimeRestriction) -> TimeRestriction:
         """Fix time restriction to not perform catchup.
 
@@ -146,6 +155,9 @@ class DeltaSchedule(Schedule):
 
     def get_prev(self, current: DateTime) -> DateTime:
         return convert_to_utc(current - self._delta)
+
+    def align(self, current: DateTime) -> DateTime:
+        return current
 
     def cancel_catchup(self, restriction: TimeRestriction) -> TimeRestriction:
         """Fix time restriction to not perform catchup.
