@@ -476,8 +476,7 @@ class DAG(LoggingMixin):
             schedule: Schedule = self.time_table._schedule
         except AttributeError:
             return None
-        next_schedule = schedule.get_next(pendulum.instance(dttm))
-        return timezone.convert_to_utc(next_schedule)
+        return schedule.get_next(pendulum.instance(dttm))
 
     def previous_schedule(self, dttm):
         """
@@ -495,8 +494,7 @@ class DAG(LoggingMixin):
             schedule: Schedule = self.time_table._schedule
         except AttributeError:
             return None
-        next_schedule = schedule.get_prev(pendulum.instance(dttm))
-        return timezone.convert_to_utc(next_schedule)
+        return schedule.get_prev(pendulum.instance(dttm))
 
     def next_dagrun_info(
         self,

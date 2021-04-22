@@ -18,6 +18,7 @@
 import datetime
 import typing
 
+from cached_property import cached_property
 from croniter import CroniterBadCronError, CroniterBadDateError, croniter
 from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
@@ -112,7 +113,6 @@ class CronSchedule(Schedule):
     def __init__(self, expression: str, timezone: Timezone) -> None:
         self._expression = expression = cron_presets.get(expression, expression)
         self._timezone = timezone
-        self._should_fix_dst = not _is_schedule_fixed(expression)
 
     def __eq__(self, other: typing.Any) -> bool:
         """Both expression and timezone should match."""
@@ -125,6 +125,12 @@ class CronSchedule(Schedule):
             croniter(self._expression)
         except (CroniterBadCronError, CroniterBadDateError) as e:
             raise AirflowTimeTableInvalid(str(e))
+
+    @cached_property
+    def _should_fix_dst(self) -> bool:
+        # This is lazy so instantiating a schedule does not immediately raise
+        # an exception. Validity is checked with validate() during DAG-bagging.
+        return not _is_schedule_fixed(self._expression)
 
     def get_next(self, current: DateTime) -> DateTime:
         """Get the first schedule after specified time, with DST fixed."""
