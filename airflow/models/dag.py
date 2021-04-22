@@ -47,7 +47,6 @@ from typing import (
 import cached_property
 import jinja2
 import pendulum
-from croniter import croniter
 from dateutil.relativedelta import relativedelta
 from jinja2.nativetypes import NativeEnvironment
 from sqlalchemy import Boolean, Column, ForeignKey, Index, Integer, String, Text, func, or_
@@ -71,6 +70,7 @@ from airflow.stats import Stats
 from airflow.typing_compat import RePatternType
 from airflow.timetables.base import TimeRestriction, TimeTable
 from airflow.timetables.interval import CronDataIntervalTimeTable, DeltaDataIntervalTimeTable
+from airflow.timetables.schedules import Schedule
 from airflow.timetables.simple import NullTimeTable, OnceTimeTable
 from airflow.utils import timezone
 from airflow.utils.dates import cron_presets
@@ -460,23 +460,6 @@ class DAG(LoggingMixin):
             return []
         return sorted(schedule.iter_between(start, pendulum.instance(end_date)))
 
-    def is_fixed_time_schedule(self):
-        """
-        Figures out if the DAG schedule has a fixed time (e.g. 3 AM).
-
-        :return: True if the schedule has a fixed time, False if not.
-        """
-        now = datetime.now()
-        cron = croniter(self.normalized_schedule_interval, now)
-
-        start = cron.get_next(datetime)
-        cron_next = cron.get_next(datetime)
-
-        if cron_next.minute == start.minute and cron_next.hour == start.hour:
-            return True
-
-        return False
-
     def following_schedule(self, dttm):
         """
         Calculates the following schedule for this dag in UTC.
@@ -484,26 +467,17 @@ class DAG(LoggingMixin):
         :param dttm: utc datetime
         :return: utc datetime
         """
-        if isinstance(self.normalized_schedule_interval, str):
-            # we don't want to rely on the transitions created by
-            # croniter as they are not always correct
-            dttm = pendulum.instance(dttm)
-            naive = timezone.make_naive(dttm, self.timezone)
-            cron = croniter(self.normalized_schedule_interval, naive)
-
-            # We assume that DST transitions happen on the minute/hour
-            if not self.is_fixed_time_schedule():
-                # relative offset (eg. every 5 minutes)
-                delta = cron.get_next(datetime) - naive
-                following = dttm.in_timezone(self.timezone) + delta
-            else:
-                # absolute (e.g. 3 AM)
-                naive = cron.get_next(datetime)
-                tz = pendulum.timezone(self.timezone.name)
-                following = timezone.make_aware(naive, tz)
-            return timezone.convert_to_utc(following)
-        elif self.normalized_schedule_interval is not None:
-            return timezone.convert_to_utc(dttm + self.normalized_schedule_interval)
+        # XXX: I really don't want to expose get_next() on the time table class
+        # because the idea only makes sense for periodic ones, and the goal of
+        # the time table abstraction is exactly to remove the assumption that
+        # (most) time tables are periodic. Callers of this function should be
+        # refactored to use something else, eventually.
+        try:
+            schedule: Schedule = self.time_table._schedule
+        except AttributeError:
+            return None
+        next_schedule = schedule.get_next(pendulum.instance(dttm))
+        return timezone.convert_to_utc(next_schedule)
 
     def previous_schedule(self, dttm):
         """
@@ -512,26 +486,17 @@ class DAG(LoggingMixin):
         :param dttm: utc datetime
         :return: utc datetime
         """
-        if isinstance(self.normalized_schedule_interval, str):
-            # we don't want to rely on the transitions created by
-            # croniter as they are not always correct
-            dttm = pendulum.instance(dttm)
-            naive = timezone.make_naive(dttm, self.timezone)
-            cron = croniter(self.normalized_schedule_interval, naive)
-
-            # We assume that DST transitions happen on the minute/hour
-            if not self.is_fixed_time_schedule():
-                # relative offset (eg. every 5 minutes)
-                delta = naive - cron.get_prev(datetime)
-                previous = dttm.in_timezone(self.timezone) - delta
-            else:
-                # absolute (e.g. 3 AM)
-                naive = cron.get_prev(datetime)
-                tz = pendulum.timezone(self.timezone.name)
-                previous = timezone.make_aware(naive, tz)
-            return timezone.convert_to_utc(previous)
-        elif self.normalized_schedule_interval is not None:
-            return timezone.convert_to_utc(dttm - self.normalized_schedule_interval)
+        # XXX: I really don't want to expose get_prev() on the time table class
+        # because the idea only makes sense for periodic ones, and the goal of
+        # the time table abstraction is exactly to remove the assumption that
+        # (most) time tables are periodic. Callers of this function should be
+        # refactored to use something else, eventually.
+        try:
+            schedule: Schedule = self.time_table._schedule
+        except AttributeError:
+            return None
+        next_schedule = schedule.get_prev(pendulum.instance(dttm))
+        return timezone.convert_to_utc(next_schedule)
 
     def next_dagrun_info(
         self,
