@@ -2262,8 +2262,10 @@ class Airflow(AirflowBaseView):  # noqa: D101  pylint: disable=too-many-public-m
         else:
             base_date = dag.get_latest_execution_date() or timezone.utcnow()
 
-        dates = dag.date_range(base_date, num=-abs(num_runs))
-        min_date = dates[0] if dates else timezone.utc_epoch()
+        min_date = next(
+            dag.time_table.iter_next_n(base_date, 1),
+            timezone.utc_epoch(),
+        )
 
         root = request.args.get('root')
         if root:
@@ -2380,8 +2382,10 @@ class Airflow(AirflowBaseView):  # noqa: D101  pylint: disable=too-many-public-m
         else:
             base_date = dag.get_latest_execution_date() or timezone.utcnow()
 
-        dates = dag.date_range(base_date, num=-abs(num_runs))
-        min_date = dates[0] if dates else timezone.utc_epoch()
+        min_date = next(
+            dag.time_table.iter_next_n(base_date, 1),
+            timezone.utc_epoch(),
+        )
 
         root = request.args.get('root')
         if root:
@@ -2451,8 +2455,10 @@ class Airflow(AirflowBaseView):  # noqa: D101  pylint: disable=too-many-public-m
         else:
             base_date = dag.get_latest_execution_date() or timezone.utcnow()
 
-        dates = dag.date_range(base_date, num=-abs(num_runs))
-        min_date = dates[0] if dates else timezone.utc_epoch()
+        min_date = next(
+            dag.time_table.iter_next_n(base_date, 1),
+            timezone.utc_epoch(),
+        )
 
         root = request.args.get('root')
         if root:

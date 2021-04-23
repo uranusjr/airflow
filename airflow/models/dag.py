@@ -437,21 +437,6 @@ class DAG(LoggingMixin):
 
         return updated_access_control
 
-    def date_range(
-        self,
-        start_date: datetime,
-        num: Optional[int] = None,
-        end_date: Optional[datetime] = timezone.utcnow(),
-    ) -> List[datetime]:
-        start = pendulum.instance(start_date)
-        if num:
-            return sorted(self.time_table.iter_next_n(start, num))
-        if end_date is None:
-            end = pendulum.now(timezone.utc)
-        else:
-            end = pendulum.instance(end_date)
-        return sorted(self.time_table.iter_between(start, end))
-
     def following_schedule(self, dttm):
         """
         Calculates the following schedule for this dag in UTC.
@@ -561,9 +546,15 @@ class DAG(LoggingMixin):
         :return: a list of dates within the interval following the dag's schedule
         :rtype: list
         """
-        start = start_date or self._format_time_restriction().earliest
-        end = end_date or timezone.utcnow()
-        return self.date_range(start, end_date=end)
+        if start_date is None:
+            start = self._format_time_restriction().earliest
+        else:
+            start = pendulum.instance(start_date)
+        if end_date is None:
+            end = pendulum.now(timezone.utc)
+        else:
+            end = pendulum.instance(end_date)
+        return sorted(self.time_table.iter_between(start, end))
 
     @provide_session
     def get_last_dagrun(self, session=None, include_externally_triggered=False):
