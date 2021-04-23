@@ -73,7 +73,6 @@ from airflow.timetables.interval import CronDataIntervalTimeTable, DeltaDataInte
 from airflow.timetables.schedules import Schedule
 from airflow.timetables.simple import NullTimeTable, OnceTimeTable
 from airflow.utils import timezone
-from airflow.utils.dates import cron_presets
 from airflow.utils.file import correct_maybe_zipped
 from airflow.utils.helpers import validate_key
 from airflow.utils.log.logging_mixin import LoggingMixin
@@ -562,36 +561,9 @@ class DAG(LoggingMixin):
         :return: a list of dates within the interval following the dag's schedule
         :rtype: list
         """
-        run_dates = []
-
-        using_start_date = start_date
-        using_end_date = end_date
-
-        # dates for dag runs
-        using_start_date = using_start_date or min(t.start_date for t in self.tasks)
-        using_end_date = using_end_date or timezone.utcnow()
-
-        # next run date for a subdag isn't relevant (schedule_interval for subdags
-        # is ignored) so we use the dag run's start date in the case of a subdag
-        next_run_date = self.normalize_schedule(using_start_date) if not self.is_subdag else using_start_date
-
-        while next_run_date and next_run_date <= using_end_date:
-            run_dates.append(next_run_date)
-            next_run_date = self.following_schedule(next_run_date)
-
-        return run_dates
-
-    def normalize_schedule(self, dttm):
-        """Returns dttm + interval unless dttm is first interval then it returns dttm"""
-        following = self.following_schedule(dttm)
-
-        # in case of @once
-        if not following:
-            return dttm
-        if self.previous_schedule(following) != dttm:
-            return following
-
-        return dttm
+        start = start_date or self._format_time_restriction().earliest
+        end = end_date or timezone.utcnow()
+        return self.date_range(start, end_date=end)
 
     @provide_session
     def get_last_dagrun(self, session=None, include_externally_triggered=False):
@@ -746,24 +718,6 @@ class DAG(LoggingMixin):
             stacklevel=2,
         )
         return self.get_is_paused()
-
-    @property
-    def normalized_schedule_interval(self) -> Optional[ScheduleInterval]:
-        """
-        Returns Normalized Schedule Interval. This is used internally by the Scheduler to
-        schedule DAGs.
-
-        1. Converts Cron Preset to a Cron Expression (e.g ``@monthly`` to ``0 0 1 * *``)
-        2. If Schedule Interval is "@once" return "None"
-        3. If not (1) or (2) returns schedule_interval
-        """
-        if isinstance(self.schedule_interval, str) and self.schedule_interval in cron_presets:
-            _schedule_interval = cron_presets.get(self.schedule_interval)  # type: Optional[ScheduleInterval]
-        elif self.schedule_interval == '@once':
-            _schedule_interval = None
-        else:
-            _schedule_interval = self.schedule_interval
-        return _schedule_interval
 
     @provide_session
     def handle_callback(self, dagrun, success=True, reason=None, session=None):

@@ -1370,7 +1370,7 @@ class TestBackfillJob(unittest.TestCase):
             )
             return dag
 
-        test_dag = get_test_dag_for_backfill()
+        test_dag = get_test_dag_for_backfill("@hourly")
         assert [DEFAULT_DATE] == test_dag.get_run_dates(start_date=DEFAULT_DATE, end_date=DEFAULT_DATE)
 
         test_dag = get_test_dag_for_backfill(schedule_interval="@hourly")
