@@ -437,6 +437,90 @@ class DAG(LoggingMixin):
 
         return updated_access_control
 
+    @cached_property.cached_property
+    def _time_restriction(self) -> TimeRestriction:
+        start_dates = [t.start_date for t in self.tasks if t.start_date]
+        if self.start_date is not None:
+            start_dates.append(self.start_date)
+        if start_dates:
+            restriction_earliest = timezone.coerce_datetime(min(start_dates))
+        else:
+            restriction_earliest = None
+        end_dates = [t.end_date for t in self.tasks if t.end_date]
+        if self.end_date is not None:
+            end_dates.append(self.end_date)
+        if end_dates:
+            restriction_latest = timezone.coerce_datetime(max(end_dates))
+        else:
+            restriction_latest = None
+        return TimeRestriction(restriction_earliest, restriction_latest)
+
+    @cached_property.cached_property
+    def time_table(self) -> TimeTable:
+        interval = self.schedule_interval
+        if interval is None:
+            return NullTimeTable()
+        if interval == "@once":
+            return OnceTimeTable()
+        if isinstance(interval, (timedelta, relativedelta)):
+            return DeltaDataIntervalTimeTable(interval)
+        if not isinstance(interval, str):
+            raise ValueError(f"Impossible schedule_interval type {interval!r}")
+        tz = pendulum.timezone(self.timezone.name)
+        return CronDataIntervalTimeTable(interval, tz)
+
+    def next_dagrun_info(
+        self,
+        date_last_automated_dagrun: Optional[pendulum.DateTime],
+    ) -> Tuple[Optional[pendulum.DateTime], Optional[pendulum.DateTime]]:
+        """
+        Get information about the next DagRun of this dag after ``date_last_automated_dagrun`` -- the
+        execution date, and the earliest it could be scheduled
+
+        :param date_last_automated_dagrun: The max(execution_date) of existing
+            "automated" DagRuns for this dag (scheduled or backfill, but not
+            manual)
+        """
+        # XXX: The timezone.coerce_datetime calls in this function should not
+        # be necessary since the function annotation suggests it only accepts
+        # pendulum.DateTime, and someone is passing datetime.datetime into this
+        # function. We should fix whatever is doing that.
+        if self.is_subdag:
+            return (None, None)
+        time_table: TimeTable = self.time_table
+        restriction = self._time_restriction
+        if not self.catchup:
+            restriction = time_table.cancel_catchup(restriction)
+        next_info = time_table.next_dagrun_info(
+            timezone.coerce_datetime(date_last_automated_dagrun),
+            restriction,
+        )
+        if next_info is None:
+            return (None, None)
+        return (next_info.data_interval.start, next_info.run_after)
+
+    def get_run_dates(self, start_date, end_date=None):
+        """
+        Returns a list of dates between the interval received as parameter using this
+        dag's schedule interval. Returned dates can be used for execution dates.
+
+        :param start_date: the start date of the interval
+        :type start_date: datetime
+        :param end_date: the end date of the interval, defaults to timezone.utcnow()
+        :type end_date: datetime
+        :return: a list of dates within the interval following the dag's schedule
+        :rtype: list
+        """
+        if start_date is None:
+            start = self._time_restriction.earliest
+        else:
+            start = pendulum.instance(start_date)
+        if end_date is None:
+            end = pendulum.now(timezone.utc)
+        else:
+            end = pendulum.instance(end_date)
+        return sorted(self.time_table.iter_between(start, end))
+
     def following_schedule(self, dttm):
         """
         Calculates the following schedule for this dag in UTC.
@@ -472,90 +556,6 @@ class DAG(LoggingMixin):
         except AttributeError:
             return None
         return schedule.get_prev(pendulum.instance(dttm))
-
-    def next_dagrun_info(
-        self,
-        date_last_automated_dagrun: Optional[pendulum.DateTime],
-    ) -> Tuple[Optional[pendulum.DateTime], Optional[pendulum.DateTime]]:
-        """
-        Get information about the next DagRun of this dag after ``date_last_automated_dagrun`` -- the
-        execution date, and the earliest it could be scheduled
-
-        :param date_last_automated_dagrun: The max(execution_date) of existing
-            "automated" DagRuns for this dag (scheduled or backfill, but not
-            manual)
-        """
-        # XXX: The timezone.coerce_datetime calls in this function should not
-        # be necessary since the function annotation suggests it only accepts
-        # pendulum.DateTime, and someone is passing datetime.datetime into this
-        # function. We should fix whatever is doing that.
-        if self.is_subdag:
-            return (None, None)
-        time_table: TimeTable = self.time_table
-        restriction = self._time_restriction
-        if not self.catchup:
-            restriction = time_table.cancel_catchup(restriction)
-        next_info = time_table.next_dagrun_info(
-            timezone.coerce_datetime(date_last_automated_dagrun),
-            restriction,
-        )
-        if next_info is None:
-            return (None, None)
-        return (next_info.data_interval.start, next_info.run_after)
-
-    @cached_property.cached_property
-    def _time_restriction(self) -> TimeRestriction:
-        start_dates = [t.start_date for t in self.tasks if t.start_date]
-        if self.start_date is not None:
-            start_dates.append(self.start_date)
-        if start_dates:
-            restriction_earliest = timezone.coerce_datetime(min(start_dates))
-        else:
-            restriction_earliest = None
-        end_dates = [t.end_date for t in self.tasks if t.end_date]
-        if self.end_date is not None:
-            end_dates.append(self.end_date)
-        if end_dates:
-            restriction_latest = timezone.coerce_datetime(max(end_dates))
-        else:
-            restriction_latest = None
-        return TimeRestriction(restriction_earliest, restriction_latest)
-
-    @cached_property.cached_property
-    def time_table(self) -> TimeTable:
-        interval = self.schedule_interval
-        if interval is None:
-            return NullTimeTable()
-        if interval == "@once":
-            return OnceTimeTable()
-        if isinstance(interval, (timedelta, relativedelta)):
-            return DeltaDataIntervalTimeTable(interval)
-        if not isinstance(interval, str):
-            raise ValueError(f"Impossible schedule_interval type {interval!r}")
-        tz = pendulum.timezone(self.timezone.name)
-        return CronDataIntervalTimeTable(interval, tz)
-
-    def get_run_dates(self, start_date, end_date=None):
-        """
-        Returns a list of dates between the interval received as parameter using this
-        dag's schedule interval. Returned dates can be used for execution dates.
-
-        :param start_date: the start date of the interval
-        :type start_date: datetime
-        :param end_date: the end date of the interval, defaults to timezone.utcnow()
-        :type end_date: datetime
-        :return: a list of dates within the interval following the dag's schedule
-        :rtype: list
-        """
-        if start_date is None:
-            start = self._time_restriction.earliest
-        else:
-            start = pendulum.instance(start_date)
-        if end_date is None:
-            end = pendulum.now(timezone.utc)
-        else:
-            end = pendulum.instance(end_date)
-        return sorted(self.time_table.iter_between(start, end))
 
     @provide_session
     def get_last_dagrun(self, session=None, include_externally_triggered=False):
