@@ -492,7 +492,7 @@ class DAG(LoggingMixin):
         if self.is_subdag:
             return (None, None)
         time_table: TimeTable = self.time_table
-        restriction = self._format_time_restriction()
+        restriction = self._time_restriction
         if not self.catchup:
             restriction = time_table.cancel_catchup(restriction)
         next_info = time_table.next_dagrun_info(
@@ -503,7 +503,8 @@ class DAG(LoggingMixin):
             return (None, None)
         return (next_info.data_interval.start, next_info.run_after)
 
-    def _format_time_restriction(self) -> TimeRestriction:
+    @cached_property.cached_property
+    def _time_restriction(self) -> TimeRestriction:
         start_dates = [t.start_date for t in self.tasks if t.start_date]
         if self.start_date is not None:
             start_dates.append(self.start_date)
@@ -547,7 +548,7 @@ class DAG(LoggingMixin):
         :rtype: list
         """
         if start_date is None:
-            start = self._format_time_restriction().earliest
+            start = self._time_restriction.earliest
         else:
             start = pendulum.instance(start_date)
         if end_date is None:
