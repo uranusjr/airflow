@@ -733,11 +733,15 @@ class TaskInstance(Base, LoggingMixin):  # pylint: disable=R0902,R0904
             # LEGACY: most likely running from unit tests
             if not dr:
                 # Means that this TaskInstance is NOT being run from a DR, but from a catchup
-                previous_scheduled_date = dag.previous_schedule(self.execution_date)
-                if not previous_scheduled_date:
+                try:
+                    schedule = dag.time_table._schedule
+                except AttributeError:
                     return None
-
-                return TaskInstance(task=self.task, execution_date=previous_scheduled_date)
+                dt = pendulum.instance(self.execution_date)
+                return TaskInstance(
+                    task=self.task,
+                    execution_date=schedule.get_prev(dt),
+                )
 
             dr.dag = dag
 
