@@ -299,7 +299,7 @@ def client_all_dags_dagruns(acl_app, user_all_dags_dagruns):  # pylint: disable=
 
 
 def test_dag_stats_success(client_all_dags_dagruns):
-    resp = client_all_dags_dagruns.post('dag_stats', follow_redirects=True)
+    resp = client_all_dags_dagruns.post('/dag_stats', follow_redirects=True)
     check_content_in_response('example_bash_operator', resp)
     assert set(list(resp.json.items())[0][1][0].keys()) == {'state', 'count'}
 
@@ -309,10 +309,21 @@ def test_task_stats_failure(dag_test_client):
     check_content_not_in_response('example_subdag_operator', resp)
 
 
-def test_dag_stats_success_for_all_dag_user(client_all_dags_dagruns):
-    resp = client_all_dags_dagruns.post('dag_stats', follow_redirects=True)
-    check_content_in_response('example_subdag_operator', resp)
-    check_content_in_response('example_bash_operator', resp)
+@pytest.mark.parametrize(
+    "data, expected_dag_ids, unexpected_dag_ids",
+    [
+        ({}, ["example_subdag_operator", "example_bash_operator"], []),
+        ({"dag_ids": "example_subdag_operator"}, ["example_subdag_operator"], ["example_bash_operator"]),
+        ({"dag_ids": "does_not_exist"}, [], ["example_subdag_operator", "example_bash_operator"]),
+    ],
+    ids=["no-filter", "filter-found", "filter-not-found"],
+)
+def test_dag_stats_success_filter(client_all_dags_dagruns, data, expected_dag_ids, unexpected_dag_ids):
+    resp = client_all_dags_dagruns.post("/dag_stats", data=data)
+    for dag_id in expected_dag_ids:
+        check_content_in_response(dag_id, resp)
+    for dag_id in unexpected_dag_ids:
+        check_content_not_in_response(dag_id, resp)
 
 
 @pytest.fixture(scope="module")
