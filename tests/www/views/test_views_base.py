@@ -433,6 +433,13 @@ def test_home_redirect_cookie_tags(admin_client):
     assert resp.headers["Location"].endswith("/home?tags=example&tags=data")
 
 
+def test_home_search_query(admin_client):
+    resp = admin_client.get("/home?search=example_bash_operator")
+    assert resp.status_code == 200
+    check_content_in_response("example_bash_operator", resp)
+    check_content_not_in_response("example_subdag_operator", resp)
+
+
 @conf_vars({("webserver", "show_recent_stats_for_completed_runs"): "False"})
 def test_task_stats_only_noncompleted(admin_client):
     resp = admin_client.post('task_stats', follow_redirects=True)
