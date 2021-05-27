@@ -617,7 +617,6 @@ def test_task_instance_clear(session, admin_client):
     assert state == State.NONE
 
 
-@pytest.mark.xfail(reason="until #15980 is merged")
 def test_task_instance_clear_failure(admin_client):
     rowid = '["12345"]'  # F.A.B. crashes if the rowid is *too* invalid.
     resp = admin_client.post(
@@ -626,7 +625,7 @@ def test_task_instance_clear_failure(admin_client):
         follow_redirects=True,
     )
     assert resp.status_code == 200
-    check_content_in_response("Failed to clear state", resp)
+    check_content_in_response("Failed to clear task instances", resp)
 
 
 @pytest.mark.parametrize(
