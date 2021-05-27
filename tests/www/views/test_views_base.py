@@ -424,6 +424,15 @@ def test_home_status_filter_cookie(admin_client):
         assert 'all' == flask.session[FILTER_STATUS_COOKIE]
 
 
+def test_home_redirect_cookie_tags(admin_client):
+    with admin_client:
+        with admin_client.session_transaction() as sess:
+            sess[FILTER_TAGS_COOKIE] = "example,data"
+        resp = admin_client.get("/home")
+    assert resp.status_code == 302
+    assert resp.headers["Location"].endswith("/home?tags=example&tags=data")
+
+
 @conf_vars({("webserver", "show_recent_stats_for_completed_runs"): "False"})
 def test_task_stats_only_noncompleted(admin_client):
     resp = admin_client.post('task_stats', follow_redirects=True)
