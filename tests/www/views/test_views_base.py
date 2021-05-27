@@ -16,13 +16,14 @@
 # specific language governing permissions and limitations
 # under the License.
 import datetime
-import json
+from unittest import mock
 
 import flask
 import pytest
 
 from airflow import version
 from airflow.jobs.base_job import BaseJob
+from airflow.jobs.scheduler_job import SchedulerJob
 from airflow.utils import timezone
 from airflow.utils.session import create_session
 from airflow.utils.state import State
@@ -131,14 +132,21 @@ def heartbeat_not_running():
     "heartbeat",
     ["heartbeat_healthy", "heartbeat_too_slow", "heartbeat_not_running"],
 )
-def test_health(request, admin_client, heartbeat):
+def test_health(request, app, heartbeat):
     # Load the corresponding fixture by name.
     scheduler_status, last_scheduler_heartbeat = request.getfixturevalue(heartbeat)
-    resp = admin_client.get('health', follow_redirects=True)
-    resp_json = json.loads(resp.data.decode('utf-8'))
-    assert 'healthy' == resp_json['metadatabase']['status']
-    assert scheduler_status == resp_json['scheduler']['status']
-    assert last_scheduler_heartbeat == resp_json['scheduler']['latest_scheduler_heartbeat']
+    resp = app.test_client().get("/health")
+    assert 'healthy' == resp.json["metadatabase"]["status"]
+    assert scheduler_status == resp.json["scheduler"]["status"]
+    assert last_scheduler_heartbeat == resp.json["scheduler"]["latest_scheduler_heartbeat"]
+
+
+def test_health_failure(app):
+    exc = Exception("random failure")
+    with mock.patch.object(SchedulerJob, "most_recent_job", side_effect=exc):
+        resp = app.test_client().get("/health")
+    assert resp.status_code == 200
+    assert resp.json["metadatabase"]["status"] == "unhealthy"
 
 
 def test_users_list(admin_client):
